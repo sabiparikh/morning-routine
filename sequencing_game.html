@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sequencing Game</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #fff176, #80deea, #ce93d8);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+  }
+  .game {
+    width: min(900px, 100%);
+    background: white;
+    border: 6px solid #222;
+    border-radius: 28px;
+    padding: 28px;
+    text-align: center;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: clamp(2rem, 6vw, 3.5rem);
+  }
+  .instructions {
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-bottom: 24px;
+  }
+  .items {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .item {
+    min-height: 150px;
+    border: 4px solid #333;
+    border-radius: 20px;
+    background: #fff8e1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+    font-size: 1.05rem;
+    font-weight: 800;
+  }
+  .item:active { cursor: grabbing; }
+  .picture {
+    font-size: 4.5rem;
+    line-height: 1;
+    margin-bottom: 10px;
+  }
+  .sequence-box {
+    min-height: 170px;
+    border: 5px dashed #555;
+    border-radius: 22px;
+    background: #f3faff;
+    padding: 18px;
+  }
+  .slots {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    min-height: 115px;
+  }
+  .slot {
+    border: 3px dashed #aaa;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    font-size: 1rem;
+    font-weight: bold;
+  }
+  .slot .item {
+    width: 100%;
+    height: 100%;
+    min-height: 105px;
+    border: 3px solid #333;
+    cursor: grab;
+  }
+  .slot .picture { font-size: 3rem; }
+  .message {
+    min-height: 52px;
+    margin-top: 18px;
+    font-size: 1.7rem;
+    font-weight: 900;
+  }
+  .skull { font-size: 4rem; display: block; }
+  button {
+    margin-top: 12px;
+    padding: 16px 30px;
+    border: 4px solid #222;
+    border-radius: 18px;
+    background: #ff4081;
+    color: white;
+    font-size: 1.25rem;
+    font-weight: 900;
+    cursor: pointer;
+  }
+  button:hover { transform: scale(1.04); }
+  button:focus-visible, .item:focus-visible {
+    outline: 4px solid #1976d2;
+    outline-offset: 3px;
+  }
+  @media (max-width: 650px) {
+    .items, .slots { grid-template-columns: repeat(2, 1fr); }
+    .item { min-height: 125px; }
+  }
+</style>
+</head>
+<body>
+<main class="game">
+  <h1>🌞 Morning Routine!</h1>
+  <div class="instructions">Drag the pictures into the correct order.</div>
+
+  <section class="items" id="items" aria-label="Pictures to arrange">
+    <div class="item" draggable="true" data-name="brush" tabindex="0"><span class="picture">🪥</span>Brush</div>
+    <div class="item" draggable="true" data-name="shower" tabindex="0"><span class="picture">🚿</span>Shower</div>
+    <div class="item" draggable="true" data-name="sun" tabindex="0"><span class="picture">☀️</span>Sun</div>
+    <div class="item" draggable="true" data-name="school" tabindex="0"><span class="picture">🏫</span>School</div>
+  </section>
+
+  <section class="sequence-box" id="dropZone" aria-label="Sequence box">
+    <div class="slots" id="slots">
+      <div class="slot" data-index="0">1</div>
+      <div class="slot" data-index="1">2</div>
+      <div class="slot" data-index="2">3</div>
+      <div class="slot" data-index="3">4</div>
+    </div>
+  </section>
+
+  <div class="message" id="message" aria-live="assertive"></div>
+  <button id="playAgain" type="button" hidden>Play Again 🔄</button>
+</main>
+
+<script>
+(() => {
+  const items = document.querySelectorAll('.item');
+  const slots = document.querySelectorAll('.slot');
+  const message = document.getElementById('message');
+  const playAgain = document.getElementById('playAgain');
+  const source = document.getElementById('items');
+  const correct = ['sun', 'brush', 'shower', 'school'];
+  let gameOver = false;
+  let dragged = null;
+
+  function setupItem(item) {
+    item.addEventListener('dragstart', e => {
+      if (gameOver) { e.preventDefault(); return; }
+      dragged = item;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', item.dataset.name);
+    });
+  }
+
+  items.forEach(setupItem);
+
+  slots.forEach(slot => {
+    slot.addEventListener('dragover', e => {
+      if (!gameOver) e.preventDefault();
+    });
+
+    slot.addEventListener('drop', e => {
+      e.preventDefault();
+      if (gameOver || !dragged) return;
+
+      const existing = slot.querySelector('.item');
+      if (existing) {
+        source.appendChild(existing);
+      }
+
+      slot.replaceChildren(dragged);
+      checkMove();
+      dragged = null;
+    });
+  });
+
+  function checkMove() {
+    const placed = [...slots].map(s => s.querySelector('.item')?.dataset.name || null);
+    const filledCount = placed.filter(Boolean).length;
+
+    // As soon as a placed item is wrong, the game ends.
+    for (let i = 0; i < filledCount; i++) {
+      if (placed[i] !== correct[i]) {
+        endGame(false);
+        return;
+      }
+    }
+
+    if (filledCount === 4) {
+      endGame(true);
+    }
+  }
+
+  function endGame(won) {
+    gameOver = true;
+    items.forEach(i => i.draggable = false);
+
+    if (won) {
+      message.textContent = '🎉 AMAZING! Perfect sequence!';
+      confetti();
+    } else {
+      message.innerHTML = '<span class="skull">💀</span>Wrong move! Game over.';
+    }
+    playAgain.hidden = false;
+  }
+
+  function confetti() {
+    for (let i = 0; i < 90; i++) {
+      const piece = document.createElement('span');
+      piece.textContent = ['🎉','⭐','🟡','🔵','🟣','🟢'][i % 6];
+      piece.style.position = 'fixed';
+      piece.style.left = Math.random() * 100 + 'vw';
+      piece.style.top = '-40px';
+      piece.style.fontSize = (18 + Math.random() * 22) + 'px';
+      piece.style.zIndex = '9999';
+      piece.style.pointerEvents = 'none';
+      piece.style.transition = 'transform 1.8s ease-in, top 1.8s ease-in';
+      document.body.appendChild(piece);
+      requestAnimationFrame(() => {
+        piece.style.top = (75 + Math.random() * 30) + 'vh';
+        piece.style.transform = 'rotate(' + (Math.random() * 720 - 360) + 'deg)';
+      });
+      setTimeout(() => piece.remove(), 1900);
+    }
+  }
+
+  playAgain.addEventListener('click', () => {
+    slots.forEach((slot, i) => {
+      const item = slot.querySelector('.item');
+      if (item) source.appendChild(item);
+      slot.textContent = String(i + 1);
+    });
+    message.textContent = '';
+    playAgain.hidden = true;
+    gameOver = false;
+    items.forEach(i => i.draggable = true);
+  });
+})();
+</script>
+</body>
+</html>
